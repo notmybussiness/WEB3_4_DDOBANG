@@ -1,0 +1,65 @@
+# H2 인메모리 DB 테스트 환경
+# JWT 설정
+jwt:
+  secret: ddobang-super-secret-key-for-development-only-change-in-production
+  signup-token-expiration: 1800000      # 30분 (밀리초)
+  access-token-expiration: 900000       # 15분 (밀리초)  
+  refresh-token-expiration: 604800000   # 7일 (밀리초)
+
+# OAuth2 설정 (실제 카카오 키)
+oauth:
+  kakao:
+    client-id: 8f3d8cb62271be68c50e13d914c7c0e2
+    client-secret: bD2qEoDEr17eobh0yGyHpsNwbgy8ADpP
+
+# AWS S3 설정 (테스트용 더미값)
+cloud:
+  aws:
+    credentials:
+      access-key: dummy-access-key-for-test
+      secret-key: dummy-secret-key-for-test
+    s3:
+      bucket: dummy-bucket-for-test
+    region:
+      static: ap-northeast-2
+
+spring:
+  # H2 데이터베이스 설정
+  datasource:
+    url: jdbc:h2:mem:testdb;DB_CLOSE_DELAY=-1;DB_CLOSE_ON_EXIT=FALSE
+    username: sa
+    password: 
+    driver-class-name: org.h2.Driver
+    
+  # H2 콘솔 활성화 (테스트용)
+  h2:
+    console:
+      enabled: true
+      path: /h2-console
+      
+  jpa:
+    hibernate:
+      ddl-auto: create-drop  # 테스트시마다 스키마 재생성
+    show-sql: true
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.H2Dialect
+        format_sql: true
+        default_batch_fetch_size: 100
+        
+  # Redis 비활성화 (테스트 환경)
+  data:
+    redis:
+      host: localhost
+      port: 6379
+      timeout: 2000
+      
+  # 로깅 설정
+  logging:
+    level:
+      com.ddobang.backend: DEBUG
+      org.springframework.security: INFO
+      org.hibernate.SQL: DEBUG
+      org.hibernate.type.descriptor.sql.BasicBinder: TRACE
+    pattern:
+      console: "%d{yyyy-MM-dd HH:mm:ss} [%thread] %-5level %logger{36} - %msg%n"

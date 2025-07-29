@@ -1,0 +1,55 @@
+# IDE
+.idea/
+*.iml
+*.iws
+*.ipr
+.vscode/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+logs/
+*.log
+nul
+
+# Temporary files
+*.tmp
+*.temp
+*.swp
+*.swo
+
+# Claude Code
+.claude/
+
+# Backend specific
+DDOBANG_BE/build/
+DDOBANG_BE/target/
+DDOBANG_BE/.gradle/
+DDOBANG_BE/gradle/
+DDOBANG_BE/gradlew
+DDOBANG_BE/gradlew.bat
+DDOBANG_BE/logs/
+DDOBANG_BE/src/main/resources/application-secret.yml
+
+# Frontend specific  
+DDOBANG_FE/node_modules/
+DDOBANG_FE/.next/
+DDOBANG_FE/dist/
+DDOBANG_FE/out/
+DDOBANG_FE/.env.local
+DDOBANG_FE/.env.production.local
+DDOBANG_FE/npm-debug.log*
+DDOBANG_FE/yarn-debug.log*
+DDOBANG_FE/yarn-error.log*
+
+# Docker
+*.log
+docker-compose.override.yml
+
+# Environment variables
+.env
+.env.local
+.env.production.local
+.env.test.local

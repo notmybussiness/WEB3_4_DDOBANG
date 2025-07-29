@@ -1,0 +1,17 @@
+version: '3.8'
+
+services:
+  # Backend API Server (H2 인메모리 DB 사용)
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: ddobang-backend-h2
+    environment:
+      SPRING_PROFILES_ACTIVE: default
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./logs:/app/logs
+
+# 볼륨은 필요 없음 (인메모리 DB 사용)
