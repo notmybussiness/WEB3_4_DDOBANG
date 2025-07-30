@@ -53,3 +53,11 @@ docker-compose.override.yml
 .env.local
 .env.production.local
 .env.test.local
+
+# Claude 관련 파일들 (git에서 제외)
+CLAUDE.md
+claude.md
+sse-jwt-performance-test.js
+sse-performance-test.js
+cookies.txt
+test-integration.sh
