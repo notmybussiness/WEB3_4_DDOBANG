@@ -34,7 +34,7 @@ import lombok.RequiredArgsConstructor;
 @Tag(name = "알림", description = "알림 관련 API")
 @RestController
 @RequiredArgsConstructor
-@RequestMapping("/alarms")
+@RequestMapping("/api/v1/alarms")
 public class AlarmController {
 	private final AlarmService alarmService;
 	private final AlarmEventService alarmEventService; //

@@ -87,6 +87,8 @@ public class SecurityConfig {
 					.requestMatchers("/api/v1/parties/*").permitAll()
 					.requestMatchers("/api/v1/stores/*").permitAll()
 					.requestMatchers("/actuator/**").permitAll()
+					// 임시 테스트용: JWT 생성 및 SSE 테스트 엔드포인트 공개
+					.requestMatchers("/api/v1/test/**").permitAll()
 
 					// 인증 필요 API
 					.anyRequest().hasAnyRole("USER", "ADMIN");
