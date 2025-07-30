@@ -125,6 +125,49 @@ cd DDOBANG_FE
 npm test
 ```
 
+## 성능 고도화 계획
+
+### 현재 상태
+- SSE 기반 실시간 알림 시스템 (최대 200명 동시 연결)
+- JWT 3-토큰 인증 시스템 (Access/Refresh/Signup)
+- 단일 서버 아키텍처
+
+### 고도화 목표
+- **동시 연결**: 200명 → 2,000명 (10배 향상)
+- **메시지 처리량**: 100msg/sec → 1,000msg/sec
+- **안정성**: 메시지 영속성 보장 및 자동 복구
+- **확장성**: 수평 확장 가능한 분산 아키텍처
+
+### 기술 전환 계획
+
+#### Phase 1: 성능 측정
+- 현재 SSE 시스템 부하 테스트 (K6)
+- 병목 지점 분석 및 개선점 도출
+
+#### Phase 2: MQ 도입
+- RabbitMQ 기반 메시지 큐 시스템
+- Dead Letter Queue 및 재시도 메커니즘
+- 클러스터링을 통한 고가용성
+
+#### Phase 3: 실시간 채팅
+- WebSocket + STOMP 프로토콜
+- 파티별 그룹 채팅 및 1:1 개인 채팅
+- Redis 기반 메시지 영속화
+
+#### Phase 4: 분산 아키텍처
+- Redis Sentinel 클러스터링
+- 로드밸런서 기반 다중 서버 구성
+- AWS 기반 자동 스케일링
+
+### 성능 테스트 도구
+```bash
+# SSE 부하 테스트
+node DDOBANG_BE/performance-test/sse-jwt-performance-test.js
+
+# K6 성능 테스트
+k6 run DDOBANG_BE/performance-test/k6-sse-test.js
+```
+
 ## 프로젝트 구조
 
 ```
@@ -132,6 +175,7 @@ DDOBANG/
 ├── DDOBANG_BE/          # Spring Boot Backend
 │   ├── src/main/java/   # 백엔드 소스코드
 │   ├── docker-compose.* # Docker 환경 설정
+│   ├── performance-test/# 성능 테스트 스크립트
 │   └── aws/             # AWS 배포 설정
 ├── DDOBANG_FE/          # Next.js Frontend
 │   ├── src/app/         # 페이지 컴포넌트
