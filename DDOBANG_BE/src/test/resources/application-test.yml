@@ -1,0 +1,86 @@
+# 테스트 환경 설정 파일
+server:
+  port: 8080
+
+spring:
+  application:
+    name: backend-test
+
+  # H2 인메모리 데이터베이스 (테스트용)
+  datasource:
+    url: jdbc:h2:mem:testdb;DB_CLOSE_DELAY=-1;DB_CLOSE_ON_EXIT=FALSE;MODE=MySQL
+    username: sa
+    password: 
+    driver-class-name: org.h2.Driver
+    
+  jpa:
+    hibernate:
+      ddl-auto: create-drop
+    show-sql: false  # 테스트 시 SQL 로그 비활성화
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.H2Dialect
+        format_sql: false
+
+  # 보안 설정 (테스트용)
+  security:
+    oauth2:
+      client:
+        registration:
+          kakao:
+            client-id: test-kakao-client-id
+            client-secret: test-kakao-client-secret
+            authorization-grant-type: authorization_code
+            redirect-uri: "http://localhost:8080/login/oauth2/code/kakao"
+            client-authentication-method: client_secret_post
+        provider:
+          kakao:
+            authorization-uri: https://kauth.kakao.com/oauth/authorize
+            token-uri: https://kauth.kakao.com/oauth/token
+            user-info-uri: https://kapi.kakao.com/v2/user/me
+            user-name-attribute: id
+
+# JWT 설정 (테스트용)
+jwt:
+  secret-key: test-jwt-secret-key-for-testing-environment-must-be-longer-than-32-characters
+  access-token-expire-time: 3600000  # 1시간
+  refresh-token-expire-time: 86400000  # 24시간
+  
+# OAuth 설정 (테스트용)  
+oauth:
+  kakao:
+    client-id: test-kakao-client-id
+    client-secret: test-kakao-client-secret
+    redirect-url: http://localhost:8080/login/oauth2/code/kakao
+
+# CORS 설정 (테스트용)
+cors:
+  allowed-origins: http://localhost:3000,http://localhost:8080
+
+# 시스템 설정 (테스트용)
+system:
+  jwt:
+    secret: test-jwt-secret-key-for-testing-environment
+    access-expire-time: 3600000
+    refresh-expire-time: 86400000
+
+# 기타 설정들
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics
+  endpoint:
+    health:
+      show-details: when_authorized
+
+# SSE 설정
+sse:
+  timeout: 600000
+  
+# 로깅 설정
+logging:
+  level:
+    com.ddobang.backend: DEBUG
+    org.springframework.security: DEBUG
+    org.springframework.web: DEBUG
