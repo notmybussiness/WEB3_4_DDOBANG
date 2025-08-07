@@ -1,0 +1,207 @@
+version: '3.8'
+
+# DDOBANG 프로덕션 배포용 Docker Compose
+# AWS EC2 t2.micro (1GB RAM) 최적화 설정
+
+services:
+  # DDOBANG Backend Application
+  backend:
+    image: ghcr.io/your-username/ddobang-backend:latest  # 실제 이미지로 변경 필요
+    container_name: ddobang-backend
+    restart: unless-stopped
+    environment:
+      # 프리티어 메모리 최적화 JVM 설정 (400MB 할당)
+      - JAVA_OPTS=-Xms128m -Xmx400m -XX:+UseG1GC -XX:MaxGCPauseMillis=200 -XX:+UseContainerSupport
+      
+      # Database 연결
+      - SPRING_DATASOURCE_URL=jdbc:mysql://mysql:3306/${DB_NAME}?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Seoul
+      - SPRING_DATASOURCE_USERNAME=${DB_USERNAME}
+      - SPRING_DATASOURCE_PASSWORD=${DB_PASSWORD}
+      - SPRING_JPA_HIBERNATE_DDL_AUTO=update
+      
+      # RabbitMQ 연결
+      - SPRING_RABBITMQ_HOST=rabbitmq
+      - SPRING_RABBITMQ_PORT=5672
+      - SPRING_RABBITMQ_USERNAME=guest
+      - SPRING_RABBITMQ_PASSWORD=guest
+      - SPRING_RABBITMQ_VIRTUAL_HOST=/
+      
+      # JWT 설정
+      - JWT_SECRET=${JWT_SECRET}
+      - JWT_EXPIRATION=86400000
+      - JWT_REFRESH_EXPIRATION=604800000
+      
+      # 카카오 OAuth
+      - SPRING_SECURITY_OAUTH2_CLIENT_REGISTRATION_KAKAO_CLIENT_ID=${KAKAO_CLIENT_ID}
+      - SPRING_SECURITY_OAUTH2_CLIENT_REGISTRATION_KAKAO_CLIENT_SECRET=${KAKAO_CLIENT_SECRET}
+      - SPRING_SECURITY_OAUTH2_CLIENT_REGISTRATION_KAKAO_REDIRECT_URI=https://${DOMAIN_NAME}/login/oauth2/code/kakao
+      
+      # CORS 설정
+      - CORS_ALLOWED_ORIGINS=https://${DOMAIN_NAME}
+      
+      # 프로파일
+      - SPRING_PROFILES_ACTIVE=prod
+      
+      # 서버 설정
+      - SERVER_PORT=8080
+      
+      # 로깅
+      - LOGGING_LEVEL_COM_DDOBANG=INFO
+      - LOGGING_LEVEL_ROOT=WARN
+      
+    depends_on:
+      mysql:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    networks:
+      - ddobang-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/actuator/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
+  # MySQL Database
+  mysql:
+    image: mysql:8.0
+    container_name: ddobang-mysql
+    restart: unless-stopped
+    environment:
+      - MYSQL_ROOT_PASSWORD=${DB_PASSWORD}
+      - MYSQL_DATABASE=${DB_NAME}
+      - MYSQL_USER=${DB_USERNAME}
+      - MYSQL_PASSWORD=${DB_PASSWORD}
+      - TZ=Asia/Seoul
+    volumes:
+      - mysql_data:/var/lib/mysql
+      - ./mysql/conf.d:/etc/mysql/conf.d:ro
+    networks:
+      - ddobang-network
+    ports:
+      - "3306:3306"  # 개발 시에만 사용, 프로덕션에서는 제거 권장
+    # 메모리 제한 (200MB)
+    deploy:
+      resources:
+        limits:
+          memory: 200M
+        reservations:
+          memory: 100M
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-p${DB_PASSWORD}"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    command: >
+      --character-set-server=utf8mb4
+      --collation-server=utf8mb4_unicode_ci
+      --innodb-buffer-pool-size=100M
+      --max-connections=50
+      --query-cache-size=20M
+
+  # RabbitMQ Message Broker
+  rabbitmq:
+    image: rabbitmq:3.12-management-alpine
+    container_name: ddobang-rabbitmq
+    restart: unless-stopped
+    environment:
+      - RABBITMQ_DEFAULT_USER=guest
+      - RABBITMQ_DEFAULT_PASS=guest
+      - RABBITMQ_VM_MEMORY_HIGH_WATERMARK=150MB
+      - RABBITMQ_DISK_FREE_LIMIT=1GB
+      - TZ=Asia/Seoul
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+    networks:
+      - ddobang-network
+    ports:
+      - "15672:15672"  # Management UI (개발 시에만, 프로덕션에서는 제거 권장)
+    # 메모리 제한 (200MB)
+    deploy:
+      resources:
+        limits:
+          memory: 200M
+        reservations:
+          memory: 100M
+    healthcheck:
+      test: rabbitmq-diagnostics -q ping
+      interval: 30s
+      timeout: 30s
+      retries: 3
+      start_period: 60s
+
+  # Nginx Reverse Proxy
+  nginx:
+    image: nginx:alpine
+    container_name: ddobang-nginx
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./nginx/ssl:/etc/nginx/ssl:ro
+      - nginx_logs:/var/log/nginx
+      - certbot_www:/var/www/certbot:ro
+    depends_on:
+      - backend
+    networks:
+      - ddobang-network
+    # 메모리 제한 (50MB)
+    deploy:
+      resources:
+        limits:
+          memory: 50M
+        reservations:
+          memory: 20M
+
+  # Let's Encrypt SSL 인증서 관리
+  certbot:
+    image: certbot/certbot
+    container_name: ddobang-certbot
+    restart: "no"
+    volumes:
+      - ./nginx/ssl:/etc/letsencrypt
+      - certbot_www:/var/www/certbot
+    profiles:
+      - ssl-setup  # docker-compose --profile ssl-setup run certbot으로 실행
+    command: >
+      certonly --webroot 
+      --webroot-path=/var/www/certbot
+      --email your-email@example.com
+      --agree-tos --no-eff-email
+      -d ${DOMAIN_NAME}
+
+  # 로그 수집 (선택사항)
+  fluentd:
+    image: fluent/fluentd:v1.16-debian-1
+    container_name: ddobang-fluentd
+    restart: unless-stopped
+    volumes:
+      - ./fluentd/conf:/fluentd/etc
+      - nginx_logs:/var/log/nginx:ro
+    networks:
+      - ddobang-network
+    profiles:
+      - logging  # 로깅이 필요할 때만 활성화
+
+# 데이터 볼륨
+volumes:
+  mysql_data:
+    driver: local
+  rabbitmq_data:
+    driver: local
+  nginx_logs:
+    driver: local
+  certbot_www:
+    driver: local
+
+# 네트워크
+networks:
+  ddobang-network:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.20.0.0/16
