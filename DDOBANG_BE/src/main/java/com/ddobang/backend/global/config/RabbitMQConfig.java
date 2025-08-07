@@ -18,7 +18,7 @@ import org.springframework.context.annotation.Profile;
  * - 부하 분산 및 확장성 개선
  */
 @Configuration
-@Profile({"prod", "rabbitmq"}) // 운영환경이나 rabbitmq 프로필일 때만 활성화
+// @Profile 제거하여 모든 환경에서 활성화 (RabbitMQ 연결 실패 시는 자동으로 비활성화)
 public class RabbitMQConfig {
 
     // Exchange Names

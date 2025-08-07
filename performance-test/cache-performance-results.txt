@@ -1,0 +1,25 @@
+DDOBANG Redis 캐싱 성능 테스트 - 2025년 08월  6일 수 오전  2:55:57
+========================================
+
+=== JWT Token Generation (No Cache) ===
+Endpoint: /api/v1/test/jwt
+1. Cache Miss Test (Cold Start)
+Cold start time: 0.006247s
+2. Cache Hit Test (Multiple Requests)
+Cached requests: 20
+Cached average: s
+Cached min: 0.004517s
+Cached max: 0.007679s
+
+
+=== Regions API (With Cache) ===
+Endpoint: /api/v1/regions?majorRegion=%EC%84%9C%EC%9A%B8
+1. Cache Miss Test (Cold Start)
+Cold start time: 0.031807s
+2. Cache Hit Test (Multiple Requests)
+Cached requests: 20
+Cached average: s
+Cached min: 0.003729s
+Cached max: 0.008225s
+
+Redis 캐싱 성능 테스트 완료 - 2025년 08월  6일 수 오전  2:56:01

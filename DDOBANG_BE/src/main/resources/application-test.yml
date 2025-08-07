@@ -10,12 +10,39 @@ spring:
     hibernate:
       ddl-auto: create-drop
 
+  # Redis 설정 (테스트용 임베디드)
+  data:
+    redis:
+      host: localhost
+      port: 6379
+      timeout: 2000ms
+
 # Custom settings
 custom:
   fileUpload:
     dirPath: c:/temp/ddobang_test
+  cache:
+    ttl:
+      regions: 3600    # 지역 데이터 캐시 TTL (1시간)
+      themes: 1800     # 테마 데이터 캐시 TTL (30분)
+      parties: 300     # 파티 목록 캐시 TTL (5분)
 
 jwt:
-  signup-token-expiration: 600000      # 10분
-  access-token-expiration: 3600000     # 1시간
-  refresh-token-expiration: 604800000  # 7일
+  secret-key: test-secret-key-for-testing-only-should-be-longer-than-256-bits
+  signup-token-expiry: 600000      # 10분
+  access-token-expiry: 3600000     # 1시간
+  refresh-token-expiry: 604800000  # 7일
+
+# OAuth2 설정 (테스트용 더미 값)
+oauth:
+  kakao:
+    client-id: test-client-id
+    client-secret: test-client-secret
+
+# AWS S3 설정 (테스트용 더미 값)
+aws:
+  s3:
+    access-key: test-access-key
+    secret-key: test-secret-key
+    bucket: test-bucket
+    region: ap-northeast-2

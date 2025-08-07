@@ -14,6 +14,9 @@ import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
+import io.micrometer.core.instrument.MeterRegistry;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
+
 class EmitterRepositoryExtendedTest {
 
 	private EmitterRepository emitterRepository;
@@ -35,7 +38,8 @@ class EmitterRepositoryExtendedTest {
 	@BeforeEach
 	void setUp() {
 		MockitoAnnotations.openMocks(this);
-		emitterRepository = new EmitterRepository();
+		MeterRegistry meterRegistry = new SimpleMeterRegistry();
+		emitterRepository = new EmitterRepository(meterRegistry);
 	}
 
 	@Test

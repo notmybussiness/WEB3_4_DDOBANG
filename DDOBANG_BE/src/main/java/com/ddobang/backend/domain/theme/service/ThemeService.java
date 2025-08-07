@@ -44,6 +44,7 @@ public class ThemeService {
 	private final StoreService storeService;
 	private final ThemeTagService themeTagService;
 
+	@Cacheable(value = "themes", key = "#filterRequest.toString() + '-' + #page + '-' + #size")
 	@Transactional(readOnly = true)
 	public SliceDto<ThemesResponse> getThemesWithFilter(ThemeFilterRequest filterRequest, int page, int size) {
 
@@ -52,6 +53,7 @@ public class ThemeService {
 		return SliceDto.of(themes.stream().map(ThemesResponse::of).toList(), size);
 	}
 
+	@Cacheable(value = "themes", key = "'detail-' + #id")
 	@Transactional(readOnly = true)
 	public ThemeDetailResponse getThemeWithStat(Long id) {
 
@@ -140,6 +142,7 @@ public class ThemeService {
 		return SliceDto.of(themes, size);
 	}
 
+	@Cacheable(value = "themes", key = "'all-tags'")
 	public List<ThemeTagResponse> getAllThemeTags() {
 		return themeTagService.getAllTags();
 	}

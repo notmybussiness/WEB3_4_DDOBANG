@@ -1,0 +1,173 @@
+# t2.micro 환경 시뮬레이션 및 부하테스트
+version: '3.8'
+
+services:
+  # t2.micro 최적화 백엔드 (메모리 제한)
+  backend:
+    build: 
+      context: ./DDOBANG_BE
+      dockerfile: Dockerfile.t2micro
+    container_name: ddobang-t2micro
+    ports:
+      - "8080:8080"
+    environment:
+      - SPRING_PROFILES_ACTIVE=t2micro
+      - JAVA_OPTS=-Xms256m -Xmx400m -XX:+UseG1GC -XX:MaxGCPauseMillis=100
+    # t2.micro 리소스 제한 시뮬레이션
+    deploy:
+      resources:
+        limits:
+          memory: 750M  # 시스템 여유분 고려
+          cpus: '1.0'
+        reservations:
+          memory: 400M
+          cpus: '0.5'
+    networks:
+      - loadtest
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/actuator/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
+  # Prometheus - 경량화 설정
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: prometheus-t2micro
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./monitoring/prometheus-t2micro.yml:/etc/prometheus/prometheus.yml
+      - prometheus_data:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--storage.tsdb.retention.time=2h'  # 짧은 보존 기간
+      - '--storage.tsdb.retention.size=100MB'  # 메모리 절약
+      - '--web.enable-lifecycle'
+    # 메모리 제한
+    deploy:
+      resources:
+        limits:
+          memory: 150M
+          cpus: '0.3'
+    networks:
+      - loadtest
+    depends_on:
+      backend:
+        condition: service_healthy
+
+  # Grafana - 경량화
+  grafana:
+    image: grafana/grafana:latest
+    container_name: grafana-t2micro
+    ports:
+      - "3001:3000"
+    environment:
+      - GF_SECURITY_ADMIN_USER=admin
+      - GF_SECURITY_ADMIN_PASSWORD=admin123
+      - GF_USERS_ALLOW_SIGN_UP=false
+      - GF_INSTALL_PLUGINS=
+      - GF_DEFAULT_APP_MODE=development
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./monitoring/grafana/provisioning:/etc/grafana/provisioning
+    # 메모리 제한
+    deploy:
+      resources:
+        limits:
+          memory: 100M
+          cpus: '0.2'
+    networks:
+      - loadtest
+    depends_on:
+      - prometheus
+
+  # K6 부하테스트 - 메인 테스트
+  k6-normal:
+    image: grafana/k6:latest
+    container_name: k6-t2micro-normal
+    volumes:
+      - ./performance-test:/scripts
+      - ./performance-test/results:/results
+    environment:
+      - K6_OUT=json=/results/normal-test-results.json
+    command: run --summary-export=/results/normal-summary.json /scripts/t2-micro-optimized-test.js
+    networks:
+      - loadtest
+    depends_on:
+      backend:
+        condition: service_healthy
+    profiles:
+      - test
+
+  # K6 부하테스트 - 메모리 스트레스
+  k6-memory-stress:
+    image: grafana/k6:latest
+    container_name: k6-memory-stress
+    volumes:
+      - ./performance-test:/scripts
+      - ./performance-test/results:/results
+    environment:
+      - K6_OUT=json=/results/memory-stress-results.json
+      - SCENARIO=memory_stress
+    command: run --summary-export=/results/memory-summary.json /scripts/t2-micro-optimized-test.js
+    networks:
+      - loadtest
+    depends_on:
+      - k6-normal
+    profiles:
+      - stress
+
+  # K6 부하테스트 - 스파이크
+  k6-spike:
+    image: grafana/k6:latest
+    container_name: k6-spike-test
+    volumes:
+      - ./performance-test:/scripts
+      - ./performance-test/results:/results
+    environment:
+      - K6_OUT=json=/results/spike-test-results.json
+      - SCENARIO=spike_test
+    command: run --summary-export=/results/spike-summary.json /scripts/t2-micro-optimized-test.js
+    networks:
+      - loadtest
+    depends_on:
+      - k6-memory-stress
+    profiles:
+      - spike
+
+  # 리소스 모니터링 도구 (경량)
+  cadvisor:
+    image: gcr.io/cadvisor/cadvisor:latest
+    container_name: cadvisor-t2micro
+    ports:
+      - "8081:8080"
+    volumes:
+      - /:/rootfs:ro
+      - /var/run:/var/run:rw
+      - /sys:/sys:ro
+      - /var/lib/docker:/var/lib/docker:ro
+    command:
+      - '--housekeeping_interval=30s'
+      - '--docker_only=true'
+      - '--storage_duration=2m0s'
+    # 최소한의 리소스
+    deploy:
+      resources:
+        limits:
+          memory: 50M
+          cpus: '0.1'
+    networks:
+      - loadtest
+    profiles:
+      - monitor
+
+volumes:
+  prometheus_data:
+  grafana_data:
+
+networks:
+  loadtest:
+    driver: bridge

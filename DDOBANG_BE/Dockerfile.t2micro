@@ -1,0 +1,65 @@
+# t2.micro 최적화 Dockerfile (1GB RAM 환경)
+# 첫 번째 스테이지: 빌드 스테이지
+FROM gradle:jdk-21-and-23-graal-jammy AS builder
+
+# 작업 디렉토리 설정
+WORKDIR /app
+
+# 빌드 캐시 최적화를 위한 의존성 파일 먼저 복사
+COPY build.gradle settings.gradle ./
+
+# 종속성 다운로드 (캐시 레이어)
+RUN gradle dependencies --no-daemon
+
+# 소스 코드 복사
+COPY src src
+
+# 애플리케이션 빌드 (메모리 효율적)
+RUN gradle build --no-daemon -x test \
+    -Dorg.gradle.jvmargs="-Xmx512m -XX:+UseG1GC"
+
+# 두 번째 스테이지: 실행 스테이지 (경량화)
+FROM container-registry.oracle.com/graalvm/jdk:23-muslibc
+
+# t2.micro 최적화 환경 변수
+ENV JAVA_OPTS="-Xms256m -Xmx400m \
+    -XX:+UseG1GC \
+    -XX:MaxGCPauseMillis=100 \
+    -XX:+UnlockExperimentalVMOptions \
+    -XX:+UseContainerSupport \
+    -XX:MaxRAMPercentage=75.0 \
+    -XX:+OptimizeStringConcat \
+    -XX:+UseStringDeduplication \
+    -Djava.security.egd=file:/dev/./urandom \
+    -Dspring.jmx.enabled=false \
+    -Dmanagement.endpoints.web.exposure.include=health,metrics,prometheus"
+
+# Spring Boot 최적화 환경 변수
+ENV SPRING_PROFILES_ACTIVE=docker \
+    SERVER_TOMCAT_THREADS_MAX=50 \
+    SERVER_TOMCAT_THREADS_MIN_SPARE=10 \
+    SERVER_TOMCAT_CONNECTION_TIMEOUT=5000 \
+    SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE=5 \
+    SPRING_DATASOURCE_HIKARI_MINIMUM_IDLE=2 \
+    SPRING_DATASOURCE_HIKARI_CONNECTION_TIMEOUT=10000 \
+    SPRING_DATA_REDIS_LETTUCE_POOL_MAX_ACTIVE=4 \
+    SPRING_DATA_REDIS_LETTUCE_POOL_MAX_IDLE=2
+
+# 작업 디렉토리 설정
+WORKDIR /app
+
+# 시간대 설정 (한국)
+RUN ln -sf /usr/share/zoneinfo/Asia/Seoul /etc/localtime
+
+# JAR 파일 복사
+COPY --from=builder /app/build/libs/*.jar app.jar
+
+# 헬스체크 추가 (t2.micro 친화적)
+HEALTHCHECK --interval=60s --timeout=10s --start-period=40s --retries=3 \
+    CMD curl -f http://localhost:8080/actuator/health || exit 1
+
+# 애플리케이션 실행 (메모리 최적화)
+ENTRYPOINT ["sh", "-c", "java $JAVA_OPTS -jar app.jar"]
+
+# 포트 노출
+EXPOSE 8080

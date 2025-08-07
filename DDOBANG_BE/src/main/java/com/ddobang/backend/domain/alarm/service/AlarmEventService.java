@@ -1,12 +1,14 @@
 package com.ddobang.backend.domain.alarm.service;
 
 import java.io.IOException;
+import java.util.Optional;
 
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
 import com.ddobang.backend.domain.alarm.dto.response.AlarmResponse;
+import com.ddobang.backend.domain.alarm.event.AlarmEvent;
 import com.ddobang.backend.domain.alarm.exception.AlarmErrorCode;
 import com.ddobang.backend.domain.alarm.exception.SseException;
 import com.ddobang.backend.domain.alarm.infra.EmitterRepository;
@@ -19,6 +21,8 @@ import lombok.extern.slf4j.Slf4j;
 @RequiredArgsConstructor
 public class AlarmEventService {
 	private final EmitterRepository emitterRepository;
+	private final Optional<AlarmMessagePublisher> alarmMessagePublisher; // RabbitMQ 사용 가능 시에만 주입
+	
 	@Value("${custom.sse.timeout}")
 	private Long sseTimeout;
 
@@ -88,8 +92,77 @@ public class AlarmEventService {
 		}
 	}
 
+	/**
+	 * RabbitMQ를 통한 비동기 알림 전송
+	 * 
+	 * @param alarmEvent 알림 이벤트
+	 * @return 발행 성공 여부
+	 */
+	public boolean sendNotificationAsync(AlarmEvent alarmEvent) {
+		log.info("비동기 알림 전송 시도: receiverId={}, title={}", 
+			alarmEvent.getReceiverId(), alarmEvent.getTitle());
+
+		// RabbitMQ가 활성화된 경우 메시지 큐를 통한 비동기 처리
+		if (alarmMessagePublisher.isPresent()) {
+			boolean published = alarmMessagePublisher.get().publishAlarmEvent(alarmEvent);
+			
+			if (published) {
+				log.info("RabbitMQ를 통한 비동기 알림 발행 성공: eventId={}", alarmEvent.getEventId());
+				return true;
+			} else {
+				log.warn("RabbitMQ 발행 실패, 직접 SSE 전송으로 fallback: eventId={}", alarmEvent.getEventId());
+				return fallbackToDirectSse(alarmEvent);
+			}
+		} else {
+			// RabbitMQ가 없는 경우 직접 SSE 전송
+			log.debug("RabbitMQ 미활성화, 직접 SSE 전송: receiverId={}", alarmEvent.getReceiverId());
+			return fallbackToDirectSse(alarmEvent);
+		}
+	}
+
+	/**
+	 * RabbitMQ 실패 시 직접 SSE 전송으로 fallback
+	 */
+	private boolean fallbackToDirectSse(AlarmEvent alarmEvent) {
+		try {
+			AlarmResponse alarmResponse = AlarmResponse.builder()
+				.id(alarmEvent.getRelId())
+				.title(alarmEvent.getTitle())
+				.content(alarmEvent.getContent())
+				.alarmType(alarmEvent.getAlarmType())
+				.readStatus(false)
+				.createdAt(alarmEvent.getTimestamp())
+				.build();
+
+			sendNotification(alarmEvent.getReceiverId(), alarmResponse);
+			log.info("직접 SSE 전송 성공: receiverId={}", alarmEvent.getReceiverId());
+			return true;
+			
+		} catch (Exception e) {
+			log.error("직접 SSE 전송 실패: receiverId={}, 오류={}", 
+				alarmEvent.getReceiverId(), e.getMessage(), e);
+			return false;
+		}
+	}
+
+	/**
+	 * 알림 전송 방식 자동 선택
+	 * - RabbitMQ 활성화: 비동기 처리
+	 * - RabbitMQ 비활성화: 직접 SSE 전송
+	 */
+	public boolean sendNotificationSmart(AlarmEvent alarmEvent) {
+		return sendNotificationAsync(alarmEvent);
+	}
+
 	// 활성 연결 수 조회 (모니터링용)
 	public int getActiveConnectionCount() {
 		return emitterRepository.getActiveConnectionCount();
+	}
+
+	/**
+	 * RabbitMQ 활성화 상태 확인
+	 */
+	public boolean isRabbitMQEnabled() {
+		return alarmMessagePublisher.isPresent();
 	}
 }

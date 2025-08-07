@@ -13,6 +13,8 @@ import org.mockito.MockitoAnnotations;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
 import com.ddobang.backend.domain.alarm.exception.SseException;
+import io.micrometer.core.instrument.MeterRegistry;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 
 class EmitterRepositoryTest {
 
@@ -27,7 +29,8 @@ class EmitterRepositoryTest {
 	@BeforeEach
 	void setUp() {
 		MockitoAnnotations.openMocks(this);
-		emitterRepository = new EmitterRepository();
+		MeterRegistry meterRegistry = new SimpleMeterRegistry();
+		emitterRepository = new EmitterRepository(meterRegistry);
 	}
 
 	@Test

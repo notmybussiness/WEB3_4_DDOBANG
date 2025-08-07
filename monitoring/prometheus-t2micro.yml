@@ -1,0 +1,59 @@
+# t2.micro 최적화 Prometheus 설정
+global:
+  scrape_interval: 30s        # 수집 간격 증가 (메모리/CPU 절약)
+  evaluation_interval: 30s
+  scrape_timeout: 10s
+  
+  external_labels:
+    environment: 't2micro'
+    instance_type: 't2.micro'
+
+# 룰 파일 (알람 최소화)
+rule_files:
+  # - "alert_rules.yml"
+
+# 스크랩 설정 (필수만)
+scrape_configs:
+  # Prometheus 자체 모니터링
+  - job_name: 'prometheus'
+    static_configs:
+      - targets: ['localhost:9090']
+    scrape_interval: 60s  # 자체 모니터링은 덜 빈번하게
+    
+  # Spring Boot 애플리케이션
+  - job_name: 'ddobang-backend'
+    static_configs:
+      - targets: ['backend:8080']
+    metrics_path: '/actuator/prometheus'
+    scrape_interval: 15s  # 핵심 메트릭은 자주 수집
+    scrape_timeout: 5s
+    
+    # 메트릭 필터링 (메모리 절약)
+    metric_relabel_configs:
+      # JVM 메모리 관련만 수집
+      - source_labels: [__name__]
+        regex: 'jvm_memory_.*|jvm_gc_.*|system_cpu_.*|process_cpu_.*|http_server_requests_.*|hikari_.*'
+        action: keep
+      
+      # 불필요한 라벨 제거
+      - regex: 'instance_id|job_id'
+        action: labeldrop
+
+  # cAdvisor (컨테이너 리소스 모니터링)
+  - job_name: 'cadvisor'
+    static_configs:
+      - targets: ['cadvisor:8080']
+    scrape_interval: 30s
+    scrape_timeout: 5s
+    
+    # 필요한 메트릭만 수집
+    metric_relabel_configs:
+      - source_labels: [__name__]
+        regex: 'container_memory_.*|container_cpu_.*|container_network_.*|container_fs_.*'
+        action: keep
+      
+      # 백엔드 컨테이너만 모니터링
+      - source_labels: [container_label_com_docker_compose_service]
+        regex: 'backend'
+        target_label: service
+        replacement: 'ddobang-backend'

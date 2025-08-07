@@ -1,0 +1,166 @@
+version: '3.8'
+
+services:
+  # Backend Application
+  ddobang-backend:
+    build:
+      context: ./DDOBANG_BE
+      dockerfile: Dockerfile
+    container_name: ddobang-backend
+    ports:
+      - "8080:8080"
+    environment:
+      # Database
+      - SPRING_DATASOURCE_URL=jdbc:h2:mem:testdb;DB_CLOSE_DELAY=-1;DB_CLOSE_ON_EXIT=FALSE
+      - SPRING_DATASOURCE_DRIVER_CLASS_NAME=org.h2.Driver
+      - SPRING_DATASOURCE_USERNAME=sa
+      - SPRING_DATASOURCE_PASSWORD=
+      - SPRING_JPA_DATABASE_PLATFORM=org.hibernate.dialect.H2Dialect
+      - SPRING_H2_CONSOLE_ENABLED=true
+      - SPRING_JPA_HIBERNATE_DDL_AUTO=create-drop
+      
+      # RabbitMQ Connection
+      - SPRING_RABBITMQ_HOST=rabbitmq
+      - SPRING_RABBITMQ_PORT=5672
+      - SPRING_RABBITMQ_USERNAME=admin
+      - SPRING_RABBITMQ_PASSWORD=admin123
+      - SPRING_RABBITMQ_VIRTUAL_HOST=/
+      
+      # RabbitMQ Connection Pool
+      - SPRING_RABBITMQ_CONNECTION_TIMEOUT=10000
+      - SPRING_RABBITMQ_REQUESTED_HEARTBEAT=30
+      - SPRING_RABBITMQ_LISTENER_SIMPLE_CONCURRENCY=3
+      - SPRING_RABBITMQ_LISTENER_SIMPLE_MAX_CONCURRENCY=10
+      - SPRING_RABBITMQ_LISTENER_SIMPLE_PREFETCH=5
+      
+      # JWT Configuration  
+      - JWT_SECRET=dGVzdC1zZWNyZXQta2V5LWZvci1qd3QtdG9rZW4tZ2VuZXJhdGlvbi1hbmQtdmFsaWRhdGlvbi1wdXJwb3Nl
+      - JWT_EXPIRATION=86400000
+      - JWT_REFRESH_EXPIRATION=604800000
+      
+      # CORS Configuration
+      - CORS_ALLOWED_ORIGINS=http://localhost:3000,http://localhost:3001
+      
+      # Performance Tuning
+      - JAVA_OPTS=-Xms512m -Xmx1024m -XX:+UseG1GC -XX:G1HeapRegionSize=16m
+      
+      # Logging
+      - LOGGING_LEVEL_COM_DDOBANG=DEBUG
+      - LOGGING_LEVEL_ORG_SPRINGFRAMEWORK_AMQP=INFO
+      - LOGGING_LEVEL_ROOT=INFO
+    depends_on:
+      - rabbitmq
+    restart: unless-stopped
+    networks:
+      - ddobang-network
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:8080/actuator/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # RabbitMQ Message Broker
+  rabbitmq:
+    image: rabbitmq:3.12-management-alpine
+    container_name: ddobang-rabbitmq
+    ports:
+      - "5672:5672"   # AMQP port
+      - "15672:15672" # Management UI
+    environment:
+      - RABBITMQ_DEFAULT_USER=admin
+      - RABBITMQ_DEFAULT_PASS=admin123
+      - RABBITMQ_DEFAULT_VHOST=/
+      
+      # Performance Configuration
+      - RABBITMQ_VM_MEMORY_HIGH_WATERMARK=0.6
+      - RABBITMQ_DISK_FREE_LIMIT=2GB
+      - RABBITMQ_MAX_CONNECTIONS=1000
+      - RABBITMQ_MAX_CHANNELS_PER_CONNECTION=100
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+      - ./monitoring/rabbitmq.conf:/etc/rabbitmq/rabbitmq.conf:ro
+    restart: unless-stopped
+    networks:
+      - ddobang-network
+    healthcheck:
+      test: rabbitmq-diagnostics -q ping
+      interval: 30s
+      timeout: 30s
+      retries: 3
+
+  # Prometheus (Metrics Collection)
+  prometheus:
+    image: prom/prometheus:v2.47.0
+    container_name: ddobang-prometheus
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus_data:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--web.console.libraries=/etc/prometheus/console_libraries'
+      - '--web.console.templates=/etc/prometheus/consoles'
+      - '--storage.tsdb.retention.time=30d'
+      - '--web.enable-lifecycle'
+    restart: unless-stopped
+    networks:
+      - ddobang-network
+    depends_on:
+      - ddobang-backend
+
+  # Grafana (Metrics Visualization)
+  grafana:
+    image: grafana/grafana:10.1.0
+    container_name: ddobang-grafana
+    ports:
+      - "3001:3000"
+    environment:
+      - GF_SECURITY_ADMIN_USER=admin
+      - GF_SECURITY_ADMIN_PASSWORD=admin123
+      - GF_INSTALL_PLUGINS=redis-datasource,rabbitmq-datasource
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./monitoring/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./monitoring/grafana/dashboards:/var/lib/grafana/dashboards:ro
+    restart: unless-stopped
+    networks:
+      - ddobang-network
+    depends_on:
+      - prometheus
+
+  # K6 Load Testing (테스트 실행용)
+  k6:
+    image: grafana/k6:latest
+    container_name: ddobang-k6
+    volumes:
+      - ./performance-test:/scripts
+      - ./performance-test/test-results:/results
+    environment:
+      - K6_PROMETHEUS_RW_SERVER_URL=http://prometheus:9090/api/v1/write
+      - BASE_URL=http://ddobang-backend:8080
+      - RABBITMQ_URL=http://rabbitmq:15672
+    networks:
+      - ddobang-network
+    depends_on:
+      - ddobang-backend
+      - rabbitmq
+    profiles:
+      - testing
+    command: ["sleep", "3600"]  # 1시간 대기 (수동 테스트 실행용)
+
+volumes:
+  rabbitmq_data:
+    driver: local
+  prometheus_data:
+    driver: local
+  grafana_data:
+    driver: local
+
+networks:
+  ddobang-network:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.20.0.0/16

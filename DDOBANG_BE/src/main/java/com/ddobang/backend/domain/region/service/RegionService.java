@@ -2,6 +2,7 @@ package com.ddobang.backend.domain.region.service;
 
 import java.util.List;
 
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.stereotype.Service;
 
 import com.ddobang.backend.domain.region.dto.SubRegionsResponse;
@@ -22,6 +23,7 @@ public class RegionService {
 
 	private final RegionRepository regionRepository;
 
+	@Cacheable(value = "regions", key = "#majorRegion")
 	public List<SubRegionsResponse> getSubRegionsByMajorRegion(String majorRegion) {
 
 		List<SubRegionsResponse> subRegions = regionRepository.findSubRegionsByMajorRegion(majorRegion);
@@ -32,6 +34,7 @@ public class RegionService {
 		return subRegions;
 	}
 
+	@Cacheable(value = "regions", key = "'region-' + #id")
 	public Region findById(Long id) {
 
 		return regionRepository.findById(id)

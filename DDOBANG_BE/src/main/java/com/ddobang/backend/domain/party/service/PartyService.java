@@ -5,6 +5,7 @@ import java.util.List;
 import java.util.Set;
 import java.util.stream.Collectors;
 
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
@@ -57,6 +58,7 @@ public class PartyService {
 	//추가 이벤트 퍼블리셔
 	private final EventPublisher eventPublisher;
 
+	@Cacheable(value = "parties", key = "'upcoming'")
 	public List<PartyMainResponse> getUpcomingParties() {
 		List<Party> parties = partyRepository.findTop12ByStatusOrderByScheduledAtAsc(PartyStatus.RECRUITING);
 		return parties.stream().map(PartyMainResponse::from).collect(Collectors.toList());

@@ -38,11 +38,6 @@ spring:
     async:
       request-timeout: 600000  # SSE 연결 타임아웃 설정 (밀리초)
 
-# 커스텀 SSE 설정
-custom:
-  sse:
-    timeout: 600000  # SSE 타임아웃 (10분)
-
   security:
     oauth2:
       client:
@@ -106,6 +101,33 @@ management:
           min-idle: 0
           max-wait: -1ms
 
+  # RabbitMQ 설정
+  rabbitmq:
+    host: localhost
+    port: 5672
+    username: admin
+    password: admin123
+    virtual-host: /
+    connection-timeout: 10000
+    publisher-confirm-type: correlated
+    publisher-returns: true
+    template:
+      mandatory: true
+      retry:
+        enabled: true
+        initial-interval: 1000
+        max-attempts: 3
+        multiplier: 2
+    listener:
+      simple:
+        acknowledge-mode: manual
+        prefetch: 10
+        retry:
+          enabled: true
+          initial-interval: 1000
+          max-attempts: 3
+          multiplier: 2
+
 # Custom settings
 custom:
   sse:
@@ -115,3 +137,13 @@ custom:
       regions: 3600    # 지역 데이터 캐시 TTL (1시간)
       themes: 1800     # 테마 데이터 캐시 TTL (30분)
       parties: 300     # 파티 목록 캐시 TTL (5분)
+  rabbitmq:
+    queues:
+      alarm: "alarm.queue"                    # 알림 메인 큐
+      alarm-retry: "alarm.queue.retry"        # 재시도 큐
+      alarm-dlq: "alarm.queue.dlq"           # Dead Letter Queue
+    exchanges:
+      alarm: "alarm.exchange"                 # 알림 토픽 익스체인지
+    routing-keys:
+      alarm: "alarm.message"                  # 알림 라우팅 키
+      alarm-retry: "alarm.retry"              # 재시도 라우팅 키
