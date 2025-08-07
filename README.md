@@ -19,32 +19,39 @@
 - **Monitoring**: Prometheus + Grafana
 - **Frontend**: Next.js 14, TypeScript
 
-## 🚀 주요 성능 개선 사항
+## 🚀 주요 개선 사항 (측정 가능)
 
-### 1. 하이브리드 알림 시스템
+### 1. SSE + RabbitMQ 하이브리드 알림 시스템
 ```
 Before: 단순 SSE 직접 전송 → 네트워크 실패 시 알림 유실
 After:  SSE + RabbitMQ 하이브리드 → 메시지 보장 + 장애 복구
 ```
 
-**개선 효과**:
-- ✅ **메시지 안정성**: 99.5% → 99.9% (DLQ + 재시도)
-- ✅ **확장성**: 단일 인스턴스 → 분산 처리 가능
-- ✅ **장애 복구**: 수동 → 자동 (30초 이내)
+**측정 방법**:
+- 메시지 전달률: `/api/v1/monitoring/alarms/status`
+- RabbitMQ 큐 통계: http://localhost:15672 (Management UI)
 
-### 2. 메모리 최적화
+### 2. JVM 메모리 최적화 (실측 가능)
+```bash
+# 메모리 사용량 실시간 확인
+docker stats ddobang-backend
+
+# JVM 힙 메모리 상세 정보
+curl http://localhost:8080/actuator/metrics/jvm.memory.used
 ```
-AWS t2.micro (1GB RAM) 환경 대응
-Before: 1024MB 사용 → OOM 위험
-After:  400MB 사용 (60% 절약)
+
+**최적화 설정**: `-Xms256m -Xmx512m -XX:+UseG1GC`
+
+### 3. API 성능 (K6 부하테스트로 측정)
+```bash
+# 실제 성능 테스트 실행
+k6 run DDOBANG_BE/src/test/resources/load-test-simple.js
+
+# 측정 지표:
+# - http_req_duration: 응답 시간
+# - http_reqs: 초당 처리량  
+# - http_req_failed: 실패율
 ```
-
-**JVM 튜닝**: `-Xms256m -Xmx400m -XX:+UseG1GC`
-
-### 3. API 성능 향상
-- **응답시간**: 평균 500ms → 200ms (60% 개선)
-- **처리량**: 초당 50개 → 100개 요청 (100% 향상)
-- **동시연결**: SSE 50개 안정적 유지
 
 ## 🏃‍♂️ 빠른 시작
 
@@ -72,18 +79,27 @@ open DDOBANG_BE/src/test/resources/sse-manual-test.html
 k6 run DDOBANG_BE/src/test/resources/load-test-simple.js
 ```
 
-## 📊 성능 테스트 결과
+## 📊 성능 테스트 가이드
 
-### 부하 테스트 (10명 동시 사용자)
-- **평균 응답시간**: 150ms
-- **95% 응답시간**: 800ms 이내
-- **성공률**: 99.8%
-- **메모리 사용**: 평균 40% (400MB 중)
+### 실제 측정 방법
+```bash
+# 1. 메모리 사용량 측정
+docker stats ddobang-backend --no-stream
 
-### SSE 연결 테스트
-- **동시 연결**: 50개 안정
-- **메시지 지연**: 평균 50ms
-- **연결 복구**: 자동 (30초 이내)
+# 2. API 성능 측정 (K6)
+k6 run --duration 2m --vus 10 DDOBANG_BE/src/test/resources/load-test-simple.js
+
+# 3. SSE 연결 테스트 (브라우저)
+open DDOBANG_BE/src/test/resources/sse-manual-test.html
+```
+
+### 측정 가능한 지표
+- **JVM 힙 메모리**: Actuator `/metrics/jvm.memory.used`
+- **API 응답시간**: K6 `http_req_duration` 
+- **SSE 연결수**: `/api/v1/monitoring/alarms/status`
+- **RabbitMQ 처리량**: Management UI `msg/sec`
+
+**상세 측정 가이드**: [docs/performance/measurement-guide.md](docs/performance/measurement-guide.md)
 
 ## 🛠️ 아키텍처
 
