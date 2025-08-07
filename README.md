@@ -66,10 +66,10 @@ docker-compose -f docs/deployment/docker-local.yml up -d
 ### 2. SSE + RabbitMQ 테스트
 ```bash
 # 브라우저에서 테스트 페이지 열기
-open tests/integration/sse-manual-test.html
+open DDOBANG_BE/src/test/resources/sse-manual-test.html
 
 # 또는 K6 부하 테스트
-k6 run tests/load-test-simple.js
+k6 run DDOBANG_BE/src/test/resources/load-test-simple.js
 ```
 
 ## 📊 성능 테스트 결과
