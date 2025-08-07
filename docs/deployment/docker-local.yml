@@ -1,0 +1,66 @@
+version: '3.8'
+
+# DDOBANG 로컬 개발 환경 (백엔드 + RabbitMQ + 모니터링)
+services:
+  # Backend Application
+  backend:
+    build: ./DDOBANG_BE
+    container_name: ddobang-backend
+    ports:
+      - "8080:8080"
+    environment:
+      # Database (H2)
+      - SPRING_DATASOURCE_URL=jdbc:h2:mem:testdb
+      - SPRING_DATASOURCE_USERNAME=sa
+      - SPRING_DATASOURCE_PASSWORD=
+      - SPRING_JPA_HIBERNATE_DDL_AUTO=create-drop
+      
+      # RabbitMQ
+      - SPRING_RABBITMQ_HOST=rabbitmq
+      - SPRING_RABBITMQ_USERNAME=guest
+      - SPRING_RABBITMQ_PASSWORD=guest
+      
+      # JWT
+      - JWT_SECRET=dGVzdC1zZWNyZXQta2V5LWZvci1qd3QtdG9rZW4tZ2VuZXJhdGlvbi1hbmQtdmFsaWRhdGlvbi1wdXJwb3Nl
+    depends_on:
+      - rabbitmq
+    networks:
+      - ddobang-net
+
+  # Message Queue
+  rabbitmq:
+    image: rabbitmq:3.12-management-alpine
+    container_name: ddobang-rabbitmq
+    ports:
+      - "5672:5672"   # AMQP
+      - "15672:15672" # Management UI
+    environment:
+      - RABBITMQ_DEFAULT_USER=guest
+      - RABBITMQ_DEFAULT_PASS=guest
+    networks:
+      - ddobang-net
+
+  # Monitoring
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: ddobang-prometheus
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml
+    networks:
+      - ddobang-net
+
+  grafana:
+    image: grafana/grafana:latest
+    container_name: ddobang-grafana
+    ports:
+      - "3001:3000"
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+    networks:
+      - ddobang-net
+
+networks:
+  ddobang-net:
+    driver: bridge
